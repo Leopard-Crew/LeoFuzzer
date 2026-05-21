@@ -1,0 +1,9 @@
+name=selftest-mismatch
+target=bin/echo-target
+corpus=corpus/samples
+results=results/selftest-suite-mismatch
+timeout=5
+expect_runs=3
+expect_ok=99
+expect_rejected=0
+expect_findings=0

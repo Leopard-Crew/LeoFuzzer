@@ -111,3 +111,15 @@ LeoUTF8 is the first external brick confirmed through LeoFuzzer.
 See:
 
     docs/external-brick-results.md
+
+## Suite Runner
+
+LeoFuzzer V0.2 introduces plain text suite files.
+
+See:
+
+    docs/suite-format.md
+
+Example:
+
+    bin/leofuzz --suite testsuites/selftest-ok.suite

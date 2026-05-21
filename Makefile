@@ -11,6 +11,7 @@ LEOFUZZ_SOURCES = \
 	src/LFReport.c \
 	src/LFRunner.c \
 	src/LFResult.c \
+	src/LFSuite.c \
 	src/LFTime.c
 
 all: $(BIN_DIR)/leofuzz probes
@@ -18,7 +19,7 @@ all: $(BIN_DIR)/leofuzz probes
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(BIN_DIR)/leofuzz: $(LEOFUZZ_SOURCES) src/LFCorpus.h src/LFReplay.h src/LFReport.h src/LFRunner.h src/LFResult.h src/LFTime.h | $(BIN_DIR)
+$(BIN_DIR)/leofuzz: $(LEOFUZZ_SOURCES) src/LFCorpus.h src/LFReplay.h src/LFReport.h src/LFRunner.h src/LFResult.h src/LFSuite.h src/LFTime.h | $(BIN_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc -o $@ $(LEOFUZZ_SOURCES)
 
 probes: \
@@ -46,6 +47,24 @@ probe-corpus: all
 
 probe-corpus-tsv: all
 	$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --corpus corpus/samples --tsv
+
+probe-suite-ok: all
+	rm -rf results/selftest-suite-ok
+	$(BIN_DIR)/leofuzz --suite testsuites/selftest-ok.suite
+	test -f results/selftest-suite-ok/summary.txt
+	test -f results/selftest-suite-ok/runs.tsv
+	grep 'runs=3' results/selftest-suite-ok/summary.txt
+	grep 'ok=3' results/selftest-suite-ok/summary.txt
+	grep 'rejected=0' results/selftest-suite-ok/summary.txt
+	grep 'findings=0' results/selftest-suite-ok/summary.txt
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-suite-ok/runs.tsv
+
+probe-suite-mismatch: all
+	rm -rf results/selftest-suite-mismatch
+	-$(BIN_DIR)/leofuzz --suite testsuites/selftest-mismatch.suite > results/selftest-suite-mismatch.log 2>&1
+	test -f results/selftest-suite-mismatch/summary.txt
+	grep 'LEOFUZZ:SUITE_MISMATCH field=ok expected=99 actual=3' results/selftest-suite-mismatch.log
+	grep 'mismatch=1' results/selftest-suite-mismatch.log
 
 probe-results: all
 	rm -rf results/selftest
@@ -181,6 +200,8 @@ selftest: \
 	probe-tsv \
 	probe-corpus \
 	probe-corpus-tsv \
+	probe-suite-ok \
+	probe-suite-mismatch \
 	probe-results \
 	probe-results-crash \
 	probe-results-timeout \
@@ -196,4 +217,4 @@ selftest: \
 clean:
 	rm -rf $(BIN_DIR)
 
-.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-replay-crash probe-replay-timeout probe-replay-mismatch probe-results-missing-parent probe-crash probe-timeout selftest
+.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-suite-ok probe-suite-mismatch probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-replay-crash probe-replay-timeout probe-replay-mismatch probe-results-missing-parent probe-crash probe-timeout selftest
