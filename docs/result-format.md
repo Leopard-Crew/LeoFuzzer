@@ -24,6 +24,8 @@ Creates:
     results/selftest/summary.txt
     results/selftest/runs.tsv
 
+If the result directory cannot be created or opened, LeoFuzzer fails before running the target.
+
 ## runs.tsv
 
 `runs.tsv` contains one row per target invocation.
@@ -37,6 +39,8 @@ Columns:
     signal
     timeout
     elapsed_ms
+
+All run rows must contain exactly seven tab-separated fields.
 
 Expected `kind` values include:
 
@@ -65,6 +69,19 @@ Expected findings include:
 - signals
 - timeouts
 - execution errors
+
+## Selftest Expectations
+
+LeoFuzzer selftests verify reports for:
+
+- clean OK corpus runs
+- crash findings
+- timeout findings
+- execution errors
+- expected domain-level rejections
+- invalid result directory paths
+
+This is deliberate: LeoFuzzer must prove its own reporting contract before it is trusted as a brick quality bench.
 
 ## Target Output
 
