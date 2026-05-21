@@ -28,6 +28,19 @@ static void LFPrintUsage(FILE *out)
     fprintf(out, "  leofuzz --target TARGET --corpus DIR --results DIR\n");
 }
 
+static int LFIsFinding(LFResultKind kind)
+{
+    if (kind == LF_RESULT_OK) {
+        return 0;
+    }
+
+    if (kind == LF_RESULT_DOMAIN_REJECT) {
+        return 0;
+    }
+
+    return 1;
+}
+
 static void LFUpdateRunCounts(LFRunContext *context, LFResultKind kind)
 {
     context->total_runs++;
@@ -86,6 +99,12 @@ static int LFRunOneInput(const char *input_path, LFRunContext *context)
     if (context->report != 0) {
         if (LFReportWriteRun(context->report, context->target_path, input_path, &result) != 0) {
             fprintf(stderr, "LEOFUZZ:ERROR failed-to-write-run-report input=%s\n", input_path);
+        }
+
+        if (LFIsFinding(result.kind)) {
+            if (LFReportWriteFindingArtifact(context->report, context->target_path, input_path, &result) != 0) {
+                fprintf(stderr, "LEOFUZZ:ERROR failed-to-write-finding-artifact input=%s\n", input_path);
+            }
         }
     }
 

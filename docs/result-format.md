@@ -6,8 +6,7 @@ Preferred V0.1 outputs:
 
 - summary.txt
 - runs.tsv
-- crashes/
-- timeouts/
+- findings/
 
 ## Report Directory
 
@@ -23,6 +22,10 @@ Creates:
 
     results/selftest/summary.txt
     results/selftest/runs.tsv
+
+If findings occur, LeoFuzzer also creates:
+
+    results/selftest/findings/
 
 If the result directory cannot be created or opened, LeoFuzzer fails before running the target.
 
@@ -70,6 +73,32 @@ Expected findings include:
 - timeouts
 - execution errors
 
+## Finding Artifacts
+
+For each finding, LeoFuzzer writes a metadata file and an input copy.
+
+Example:
+
+    findings/000001-CRASH.txt
+    findings/000001-CRASH.input
+
+The metadata file contains:
+
+    LEOFUZZ:FINDING
+    kind=...
+    target=...
+    input=...
+    input_copy=...
+    input_copy_status=...
+    exit_code=...
+    signal=...
+    timeout=...
+    elapsed_ms=...
+
+The `.input` file is a byte-for-byte copy of the original input when possible.
+
+Expected domain-level rejections do not create finding artifacts.
+
 ## Selftest Expectations
 
 LeoFuzzer selftests verify reports for:
@@ -80,6 +109,8 @@ LeoFuzzer selftests verify reports for:
 - execution errors
 - expected domain-level rejections
 - invalid result directory paths
+- finding artifact creation
+- non-finding runs not creating a findings directory
 
 This is deliberate: LeoFuzzer must prove its own reporting contract before it is trusted as a brick quality bench.
 

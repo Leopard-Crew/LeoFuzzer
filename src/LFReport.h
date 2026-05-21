@@ -8,12 +8,22 @@
 typedef struct LFReport {
     FILE *summary_file;
     FILE *runs_tsv_file;
+    char *results_path;
+    char *findings_path;
+    unsigned long finding_artifact_count;
 } LFReport;
 
 int LFReportOpen(LFReport *report, const char *results_path);
 void LFReportClose(LFReport *report);
 
 int LFReportWriteRun(
+    LFReport *report,
+    const char *target_path,
+    const char *input_path,
+    const LFRunResult *result
+);
+
+int LFReportWriteFindingArtifact(
     LFReport *report,
     const char *target_path,
     const char *input_path,

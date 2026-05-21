@@ -51,6 +51,7 @@ probe-results: all
 	$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --corpus corpus/samples --results results/selftest
 	test -f results/selftest/summary.txt
 	test -f results/selftest/runs.tsv
+	test ! -d results/selftest/findings
 	grep 'runs=3' results/selftest/summary.txt
 	grep 'ok=3' results/selftest/summary.txt
 	grep 'rejected=0' results/selftest/summary.txt
@@ -63,6 +64,10 @@ probe-results-crash: all
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/crash-target --input corpus/samples/crash.txt --results results/selftest-crash
 	test -f results/selftest-crash/summary.txt
 	test -f results/selftest-crash/runs.tsv
+	test -f results/selftest-crash/findings/000001-CRASH.txt
+	test -f results/selftest-crash/findings/000001-CRASH.input
+	grep 'kind=CRASH' results/selftest-crash/findings/000001-CRASH.txt
+	grep 'input_copy_status=OK' results/selftest-crash/findings/000001-CRASH.txt
 	grep 'runs=1' results/selftest-crash/summary.txt
 	grep 'ok=0' results/selftest-crash/summary.txt
 	grep 'rejected=0' results/selftest-crash/summary.txt
@@ -75,6 +80,10 @@ probe-results-timeout: all
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/timeout-target --input corpus/samples/timeout.txt --timeout 1 --results results/selftest-timeout
 	test -f results/selftest-timeout/summary.txt
 	test -f results/selftest-timeout/runs.tsv
+	test -f results/selftest-timeout/findings/000001-TIMEOUT.txt
+	test -f results/selftest-timeout/findings/000001-TIMEOUT.input
+	grep 'kind=TIMEOUT' results/selftest-timeout/findings/000001-TIMEOUT.txt
+	grep 'input_copy_status=OK' results/selftest-timeout/findings/000001-TIMEOUT.txt
 	grep 'runs=1' results/selftest-timeout/summary.txt
 	grep 'ok=0' results/selftest-timeout/summary.txt
 	grep 'rejected=0' results/selftest-timeout/summary.txt
@@ -87,6 +96,10 @@ probe-results-exec-error: all
 	-$(BIN_DIR)/leofuzz --target bin/does-not-exist --input corpus/samples/hello.txt --results results/selftest-exec-error
 	test -f results/selftest-exec-error/summary.txt
 	test -f results/selftest-exec-error/runs.tsv
+	test -f results/selftest-exec-error/findings/000001-EXEC_ERROR.txt
+	test -f results/selftest-exec-error/findings/000001-EXEC_ERROR.input
+	grep 'kind=EXEC_ERROR' results/selftest-exec-error/findings/000001-EXEC_ERROR.txt
+	grep 'input_copy_status=OK' results/selftest-exec-error/findings/000001-EXEC_ERROR.txt
 	grep 'runs=1' results/selftest-exec-error/summary.txt
 	grep 'ok=0' results/selftest-exec-error/summary.txt
 	grep 'rejected=0' results/selftest-exec-error/summary.txt
@@ -99,6 +112,7 @@ probe-results-domain-reject: all
 	$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --input corpus/samples/does-not-exist.txt --results results/selftest-domain-reject
 	test -f results/selftest-domain-reject/summary.txt
 	test -f results/selftest-domain-reject/runs.tsv
+	test ! -d results/selftest-domain-reject/findings
 	grep 'runs=1' results/selftest-domain-reject/summary.txt
 	grep 'ok=0' results/selftest-domain-reject/summary.txt
 	grep 'rejected=1' results/selftest-domain-reject/summary.txt

@@ -5,6 +5,26 @@
 #include <string.h>
 #include <sys/stat.h>
 
+static char *LFReportStringDuplicate(const char *text)
+{
+    size_t length;
+    char *copy;
+
+    if (text == 0) {
+        return 0;
+    }
+
+    length = strlen(text);
+    copy = (char *)malloc(length + 1);
+
+    if (copy == 0) {
+        return 0;
+    }
+
+    memcpy(copy, text, length + 1);
+    return copy;
+}
+
 static char *LFReportJoinPath(const char *left, const char *right)
 {
     size_t left_length;
@@ -69,6 +89,83 @@ static int LFReportEnsureDirectory(const char *path)
     return 0;
 }
 
+static int LFReportCopyFile(const char *source_path, const char *destination_path)
+{
+    FILE *source;
+    FILE *destination;
+    unsigned char buffer[8192];
+    size_t bytes_read;
+
+    if (source_path == 0 || destination_path == 0) {
+        return -1;
+    }
+
+    source = fopen(source_path, "rb");
+
+    if (source == 0) {
+        return -1;
+    }
+
+    destination = fopen(destination_path, "wb");
+
+    if (destination == 0) {
+        fclose(source);
+        return -1;
+    }
+
+    for (;;) {
+        bytes_read = fread(buffer, 1, sizeof(buffer), source);
+
+        if (bytes_read > 0) {
+            if (fwrite(buffer, 1, bytes_read, destination) != bytes_read) {
+                fclose(destination);
+                fclose(source);
+                return -1;
+            }
+        }
+
+        if (bytes_read < sizeof(buffer)) {
+            if (ferror(source)) {
+                fclose(destination);
+                fclose(source);
+                return -1;
+            }
+
+            break;
+        }
+    }
+
+    if (fclose(destination) != 0) {
+        fclose(source);
+        return -1;
+    }
+
+    fclose(source);
+    return 0;
+}
+
+static char *LFReportMakeFindingFileName(
+    unsigned long index,
+    const char *kind_name,
+    const char *suffix
+)
+{
+    char name[256];
+    int written;
+
+    if (kind_name == 0 || suffix == 0) {
+        return 0;
+    }
+
+    written = snprintf(name, sizeof(name), "%06lu-%s.%s", index, kind_name, suffix);
+
+    if (written < 0 || (size_t)written >= sizeof(name)) {
+        return 0;
+    }
+
+    return LFReportStringDuplicate(name);
+}
+
 int LFReportOpen(LFReport *report, const char *results_path)
 {
     char *summary_path;
@@ -80,14 +177,32 @@ int LFReportOpen(LFReport *report, const char *results_path)
 
     report->summary_file = 0;
     report->runs_tsv_file = 0;
+    report->results_path = 0;
+    report->findings_path = 0;
+    report->finding_artifact_count = 0;
 
     if (LFReportEnsureDirectory(results_path) != 0) {
+        return -1;
+    }
+
+    report->results_path = LFReportStringDuplicate(results_path);
+
+    if (report->results_path == 0) {
+        LFReportClose(report);
+        return -1;
+    }
+
+    report->findings_path = LFReportJoinPath(results_path, "findings");
+
+    if (report->findings_path == 0) {
+        LFReportClose(report);
         return -1;
     }
 
     summary_path = LFReportJoinPath(results_path, "summary.txt");
 
     if (summary_path == 0) {
+        LFReportClose(report);
         return -1;
     }
 
@@ -95,6 +210,7 @@ int LFReportOpen(LFReport *report, const char *results_path)
 
     if (runs_path == 0) {
         free(summary_path);
+        LFReportClose(report);
         return -1;
     }
 
@@ -129,6 +245,18 @@ void LFReportClose(LFReport *report)
         fclose(report->runs_tsv_file);
         report->runs_tsv_file = 0;
     }
+
+    if (report->results_path != 0) {
+        free(report->results_path);
+        report->results_path = 0;
+    }
+
+    if (report->findings_path != 0) {
+        free(report->findings_path);
+        report->findings_path = 0;
+    }
+
+    report->finding_artifact_count = 0;
 }
 
 int LFReportWriteRun(
@@ -147,6 +275,92 @@ int LFReportWriteRun(
     if (fflush(report->runs_tsv_file) != 0) {
         return -1;
     }
+
+    return 0;
+}
+
+int LFReportWriteFindingArtifact(
+    LFReport *report,
+    const char *target_path,
+    const char *input_path,
+    const LFRunResult *result
+)
+{
+    unsigned long artifact_index;
+    const char *kind_name;
+    char *metadata_name;
+    char *input_name;
+    char *metadata_path;
+    char *input_copy_path;
+    FILE *metadata;
+    int input_copy_result;
+
+    if (report == 0 || input_path == 0 || result == 0) {
+        return -1;
+    }
+
+    if (report->findings_path == 0) {
+        return -1;
+    }
+
+    if (LFReportEnsureDirectory(report->findings_path) != 0) {
+        return -1;
+    }
+
+    report->finding_artifact_count++;
+    artifact_index = report->finding_artifact_count;
+    kind_name = LFResultKindName(result->kind);
+
+    metadata_name = LFReportMakeFindingFileName(artifact_index, kind_name, "txt");
+    input_name = LFReportMakeFindingFileName(artifact_index, kind_name, "input");
+
+    if (metadata_name == 0 || input_name == 0) {
+        free(metadata_name);
+        free(input_name);
+        return -1;
+    }
+
+    metadata_path = LFReportJoinPath(report->findings_path, metadata_name);
+    input_copy_path = LFReportJoinPath(report->findings_path, input_name);
+
+    free(metadata_name);
+    free(input_name);
+
+    if (metadata_path == 0 || input_copy_path == 0) {
+        free(metadata_path);
+        free(input_copy_path);
+        return -1;
+    }
+
+    input_copy_result = LFReportCopyFile(input_path, input_copy_path);
+
+    metadata = fopen(metadata_path, "w");
+
+    if (metadata == 0) {
+        free(metadata_path);
+        free(input_copy_path);
+        return -1;
+    }
+
+    fprintf(metadata, "LEOFUZZ:FINDING\n");
+    fprintf(metadata, "kind=%s\n", kind_name);
+    fprintf(metadata, "target=%s\n", target_path != 0 ? target_path : "");
+    fprintf(metadata, "input=%s\n", input_path);
+    fprintf(metadata, "input_copy=%s\n", input_copy_path);
+    fprintf(metadata, "input_copy_status=%s\n", input_copy_result == 0 ? "OK" : "FAILED");
+    fprintf(metadata, "exit_code=%d\n", result->exit_code);
+    fprintf(metadata, "signal=%d\n", result->signal_number);
+    fprintf(metadata, "timeout=%d\n", result->timed_out);
+    fprintf(metadata, "elapsed_ms=%.3f\n", result->elapsed_ms);
+
+    if (fclose(metadata) != 0) {
+        free(metadata_path);
+        free(input_copy_path);
+        return -1;
+    }
+
+    free(metadata_path);
+    free(input_copy_path);
 
     return 0;
 }
