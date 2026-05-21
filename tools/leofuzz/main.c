@@ -9,6 +9,7 @@ static void LFPrintUsage(FILE *out)
 {
     fprintf(out, "Usage:\n");
     fprintf(out, "  leofuzz --target TARGET --input FILE [--timeout SECONDS] [--tsv]\n");
+    fprintf(out, "  leofuzz --target TARGET --input FILE [--target-output inherit|quiet]\n");
 }
 
 static int LFIsFinding(LFResultKind kind)
@@ -24,19 +25,38 @@ static int LFIsFinding(LFResultKind kind)
     return 1;
 }
 
+static int LFParseOutputMode(const char *text, LFOutputMode *output_mode)
+{
+    if (strcmp(text, "inherit") == 0) {
+        *output_mode = LF_OUTPUT_INHERIT;
+        return 0;
+    }
+
+    if (strcmp(text, "quiet") == 0) {
+        *output_mode = LF_OUTPUT_QUIET;
+        return 0;
+    }
+
+    return -1;
+}
+
 int main(int argc, char **argv)
 {
     const char *target_path;
     const char *input_path;
     int timeout_seconds;
     int tsv_output;
+    int output_mode_explicit;
     int i;
+    LFOutputMode output_mode;
     LFRunResult result;
 
     target_path = 0;
     input_path = 0;
     timeout_seconds = 5;
     tsv_output = 0;
+    output_mode = LF_OUTPUT_INHERIT;
+    output_mode_explicit = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--target") == 0) {
@@ -69,6 +89,22 @@ int main(int argc, char **argv)
             continue;
         }
 
+        if (strcmp(argv[i], "--target-output") == 0) {
+            if ((i + 1) >= argc) {
+                LFPrintUsage(stderr);
+                return 2;
+            }
+
+            if (LFParseOutputMode(argv[++i], &output_mode) != 0) {
+                fprintf(stderr, "LEOFUZZ:ERROR invalid-target-output=%s\n", argv[i]);
+                LFPrintUsage(stderr);
+                return 2;
+            }
+
+            output_mode_explicit = 1;
+            continue;
+        }
+
         if (strcmp(argv[i], "--tsv") == 0) {
             tsv_output = 1;
             continue;
@@ -89,7 +125,11 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    if (LFRunTarget(target_path, input_path, timeout_seconds, &result) != 0) {
+    if (tsv_output && !output_mode_explicit) {
+        output_mode = LF_OUTPUT_QUIET;
+    }
+
+    if (LFRunTarget(target_path, input_path, timeout_seconds, output_mode, &result) != 0) {
         fprintf(stderr, "LEOFUZZ:ERROR failed-to-run-target\n");
         return 1;
     }

@@ -2,6 +2,7 @@
 #include "LFTime.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <signal.h>
 #include <string.h>
 #include <sys/types.h>
@@ -28,6 +29,33 @@ static int LFIsCrashSignal(int signal_number)
 
     if (signal_number == SIGFPE) {
         return 1;
+    }
+
+    return 0;
+}
+
+static int LFQuietChildOutput(void)
+{
+    int null_fd;
+
+    null_fd = open("/dev/null", O_WRONLY);
+
+    if (null_fd < 0) {
+        return -1;
+    }
+
+    if (dup2(null_fd, STDOUT_FILENO) < 0) {
+        close(null_fd);
+        return -1;
+    }
+
+    if (dup2(null_fd, STDERR_FILENO) < 0) {
+        close(null_fd);
+        return -1;
+    }
+
+    if (null_fd > STDERR_FILENO) {
+        close(null_fd);
     }
 
     return 0;
@@ -64,6 +92,7 @@ int LFRunTarget(
     const char *target_path,
     const char *input_path,
     int timeout_seconds,
+    LFOutputMode output_mode,
     LFRunResult *result
 )
 {
@@ -95,6 +124,12 @@ int LFRunTarget(
     }
 
     if (pid == 0) {
+        if (output_mode == LF_OUTPUT_QUIET) {
+            if (LFQuietChildOutput() != 0) {
+                _exit(127);
+            }
+        }
+
         execlp(target_path, target_path, input_path, (char *)0);
         _exit(127);
     }
