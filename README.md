@@ -103,3 +103,11 @@ On Leopard:
 ## Principle
 
 Every brick must prove itself.
+
+## First External Brick
+
+LeoUTF8 is the first external brick confirmed through LeoFuzzer.
+
+See:
+
+    docs/external-brick-results.md
