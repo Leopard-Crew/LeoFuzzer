@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# Build products
+/bin/
+*.o
+*.dSYM/
+.DS_Store
