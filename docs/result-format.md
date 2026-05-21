@@ -38,11 +38,33 @@ Columns:
     timeout
     elapsed_ms
 
+Expected `kind` values include:
+
+- OK
+- DOMAIN_REJECT
+- USAGE
+- EXIT_ERROR
+- CRASH
+- SIGNAL
+- TIMEOUT
+- EXEC_ERROR
+
 ## summary.txt
 
 `summary.txt` contains one summary line:
 
     LEOFUZZ:SUMMARY target=... runs=... ok=... rejected=... findings=...
+
+A finding is any run that is not `OK` and not `DOMAIN_REJECT`.
+
+Expected findings include:
+
+- crashes
+- unexpected non-zero exits
+- usage errors
+- signals
+- timeouts
+- execution errors
 
 ## Target Output
 

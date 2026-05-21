@@ -51,6 +51,26 @@ probe-results: all
 	$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --corpus corpus/samples --results results/selftest
 	test -f results/selftest/summary.txt
 	test -f results/selftest/runs.tsv
+	grep 'findings=0' results/selftest/summary.txt
+	grep '^OK' results/selftest/runs.tsv
+
+probe-results-crash: all
+	rm -rf results/selftest-crash
+	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/crash-target --input corpus/samples/crash.txt --results results/selftest-crash
+	test -f results/selftest-crash/summary.txt
+	test -f results/selftest-crash/runs.tsv
+	grep 'findings=1' results/selftest-crash/summary.txt
+	grep '^CRASH' results/selftest-crash/runs.tsv
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-crash/runs.tsv
+
+probe-results-timeout: all
+	rm -rf results/selftest-timeout
+	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/timeout-target --input corpus/samples/timeout.txt --timeout 1 --results results/selftest-timeout
+	test -f results/selftest-timeout/summary.txt
+	test -f results/selftest-timeout/runs.tsv
+	grep 'findings=1' results/selftest-timeout/summary.txt
+	grep '^TIMEOUT' results/selftest-timeout/runs.tsv
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-timeout/runs.tsv
 
 probe-crash: all
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/crash-target --input corpus/samples/crash.txt
@@ -58,9 +78,9 @@ probe-crash: all
 probe-timeout: all
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/timeout-target --input corpus/samples/timeout.txt --timeout 1
 
-selftest: probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-crash probe-timeout
+selftest: probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-crash probe-timeout
 
 clean:
 	rm -rf $(BIN_DIR)
 
-.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-crash probe-timeout selftest
+.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-crash probe-timeout selftest
