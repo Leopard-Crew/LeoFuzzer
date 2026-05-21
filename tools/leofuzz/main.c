@@ -25,19 +25,6 @@ static void LFPrintUsage(FILE *out)
     fprintf(out, "  leofuzz --target TARGET --input FILE [--target-output inherit|quiet]\n");
 }
 
-static int LFIsFinding(LFResultKind kind)
-{
-    if (kind == LF_RESULT_OK) {
-        return 0;
-    }
-
-    if (kind == LF_RESULT_DOMAIN_REJECT) {
-        return 0;
-    }
-
-    return 1;
-}
-
 static void LFUpdateRunCounts(LFRunContext *context, LFResultKind kind)
 {
     context->total_runs++;

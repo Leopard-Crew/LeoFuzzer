@@ -151,7 +151,7 @@ static int LFReadCorpusDirectory(const char *corpus_path, LFCorpusList *list)
             break;
         }
 
-        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+        if (entry->d_name[0] == '.') {
             continue;
         }
 
