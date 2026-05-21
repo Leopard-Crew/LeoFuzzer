@@ -1,4 +1,5 @@
 #include "LFCorpus.h"
+#include "LFReport.h"
 #include "LFRunner.h"
 #include "LFResult.h"
 
@@ -11,6 +12,7 @@ typedef struct LFRunContext {
     int timeout_seconds;
     int tsv_output;
     LFOutputMode output_mode;
+    LFReport *report;
     unsigned long total_runs;
     unsigned long findings;
     unsigned long ok_runs;
@@ -23,6 +25,7 @@ static void LFPrintUsage(FILE *out)
     fprintf(out, "  leofuzz --target TARGET --input FILE [--timeout SECONDS] [--tsv]\n");
     fprintf(out, "  leofuzz --target TARGET --corpus DIR [--timeout SECONDS] [--tsv]\n");
     fprintf(out, "  leofuzz --target TARGET --input FILE [--target-output inherit|quiet]\n");
+    fprintf(out, "  leofuzz --target TARGET --corpus DIR --results DIR\n");
 }
 
 static void LFUpdateRunCounts(LFRunContext *context, LFResultKind kind)
@@ -80,6 +83,12 @@ static int LFRunOneInput(const char *input_path, LFRunContext *context)
         LFPrintHumanResult(stdout, context->target_path, input_path, &result);
     }
 
+    if (context->report != 0) {
+        if (LFReportWriteRun(context->report, context->target_path, input_path, &result) != 0) {
+            fprintf(stderr, "LEOFUZZ:ERROR failed-to-write-run-report input=%s\n", input_path);
+        }
+    }
+
     LFUpdateRunCounts(context, result.kind);
 
     return 0;
@@ -109,20 +118,25 @@ int main(int argc, char **argv)
     const char *target_path;
     const char *input_path;
     const char *corpus_path;
+    const char *results_path;
     int timeout_seconds;
     int tsv_output;
     int output_mode_explicit;
     int i;
     LFOutputMode output_mode;
     LFRunContext context;
+    LFReport report;
+    LFReport *active_report;
 
     target_path = 0;
     input_path = 0;
     corpus_path = 0;
+    results_path = 0;
     timeout_seconds = 5;
     tsv_output = 0;
     output_mode = LF_OUTPUT_INHERIT;
     output_mode_explicit = 0;
+    active_report = 0;
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--target") == 0) {
@@ -152,6 +166,16 @@ int main(int argc, char **argv)
             }
 
             corpus_path = argv[++i];
+            continue;
+        }
+
+        if (strcmp(argv[i], "--results") == 0) {
+            if ((i + 1) >= argc) {
+                LFPrintUsage(stderr);
+                return 2;
+            }
+
+            results_path = argv[++i];
             continue;
         }
 
@@ -207,14 +231,24 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    if ((tsv_output || corpus_path != 0) && !output_mode_explicit) {
+    if ((tsv_output || corpus_path != 0 || results_path != 0) && !output_mode_explicit) {
         output_mode = LF_OUTPUT_QUIET;
+    }
+
+    if (results_path != 0) {
+        if (LFReportOpen(&report, results_path) != 0) {
+            fprintf(stderr, "LEOFUZZ:ERROR failed-to-open-results path=%s\n", results_path);
+            return 1;
+        }
+
+        active_report = &report;
     }
 
     context.target_path = target_path;
     context.timeout_seconds = timeout_seconds;
     context.tsv_output = tsv_output;
     context.output_mode = output_mode;
+    context.report = active_report;
     context.total_runs = 0;
     context.findings = 0;
     context.ok_runs = 0;
@@ -229,12 +263,30 @@ int main(int argc, char **argv)
     } else {
         if (LFVisitCorpusFiles(corpus_path, LFVisitOneCorpusFile, &context) != 0) {
             fprintf(stderr, "LEOFUZZ:ERROR failed-to-read-corpus path=%s\n", corpus_path);
+            LFReportClose(active_report);
             return 1;
         }
     }
 
     if (!tsv_output && corpus_path != 0) {
         LFPrintSummary(&context);
+    }
+
+    if (active_report != 0) {
+        if (LFReportWriteSummary(
+                active_report,
+                context.target_path,
+                context.total_runs,
+                context.ok_runs,
+                context.rejected_runs,
+                context.findings
+            ) != 0) {
+            fprintf(stderr, "LEOFUZZ:ERROR failed-to-write-summary-report\n");
+            LFReportClose(active_report);
+            return 1;
+        }
+
+        LFReportClose(active_report);
     }
 
     if (context.findings > 0) {

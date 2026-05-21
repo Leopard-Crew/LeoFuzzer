@@ -59,3 +59,9 @@ dkms.conf
 *.o
 *.dSYM/
 .DS_Store
+
+# Runtime reports
+/results/*
+!/results/.gitkeep
+/crashes/*
+!/crashes/.gitkeep
