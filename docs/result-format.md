@@ -154,3 +154,35 @@ Replay is intentionally simple in V0.1:
 - one recorded input copy
 - one target invocation
 - no expected-kind enforcement yet
+
+## Replay
+
+A finding metadata file can be replayed with:
+
+    leofuzz --replay results/selftest-crash/findings/000001-CRASH.txt
+
+LeoFuzzer reads these fields:
+
+    kind=...
+    target=...
+    input_copy=...
+
+The copied input is then run against the recorded target.
+
+The target may be overridden explicitly:
+
+    leofuzz --replay finding.txt --target bin/alternate-target
+
+Replay expected-kind enforcement:
+
+- if the replay result kind matches the metadata `kind`, no replay mismatch is reported
+- if the replay result kind differs from the metadata `kind`, LeoFuzzer prints:
+
+        LEOFUZZ:REPLAY_MISMATCH expected=... actual=...
+
+- replay mismatch causes a non-zero exit status
+- `runs.tsv` still records the actual replay result
+- `summary.txt` still summarizes the actual target run result
+- replay mismatch is not counted as a target finding in V0.1
+
+This separation is deliberate: target behavior and replay contract behavior are related, but not identical.

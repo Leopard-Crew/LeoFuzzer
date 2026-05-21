@@ -149,6 +149,22 @@ probe-replay-timeout: all
 	grep 'kind=TIMEOUT' results/selftest-replay-timeout/findings/000001-TIMEOUT.txt
 	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-replay-timeout/runs.tsv
 
+probe-replay-mismatch: all
+	rm -rf results/selftest-replay-source-mismatch results/selftest-replay-mismatch
+	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/crash-target --input corpus/samples/crash.txt --results results/selftest-replay-source-mismatch
+	test -f results/selftest-replay-source-mismatch/findings/000001-CRASH.txt
+	-$(BIN_DIR)/leofuzz --replay results/selftest-replay-source-mismatch/findings/000001-CRASH.txt --target $(BIN_DIR)/echo-target --results results/selftest-replay-mismatch > results/selftest-replay-mismatch.log 2>&1
+	test -f results/selftest-replay-mismatch/summary.txt
+	test -f results/selftest-replay-mismatch/runs.tsv
+	test ! -d results/selftest-replay-mismatch/findings
+	grep 'LEOFUZZ:REPLAY_MISMATCH expected=CRASH actual=OK' results/selftest-replay-mismatch.log
+	grep 'mismatch=1' results/selftest-replay-mismatch.log
+	grep 'runs=1' results/selftest-replay-mismatch/summary.txt
+	grep 'ok=1' results/selftest-replay-mismatch/summary.txt
+	grep 'findings=0' results/selftest-replay-mismatch/summary.txt
+	grep '^OK' results/selftest-replay-mismatch/runs.tsv
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-replay-mismatch/runs.tsv
+
 probe-results-missing-parent: all
 	rm -rf results/selftest-missing-parent
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --input corpus/samples/hello.txt --results results/selftest-missing-parent/out
@@ -172,6 +188,7 @@ selftest: \
 	probe-results-domain-reject \
 	probe-replay-crash \
 	probe-replay-timeout \
+	probe-replay-mismatch \
 	probe-results-missing-parent \
 	probe-crash \
 	probe-timeout
@@ -179,4 +196,4 @@ selftest: \
 clean:
 	rm -rf $(BIN_DIR)
 
-.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-replay-crash probe-replay-timeout probe-results-missing-parent probe-crash probe-timeout selftest
+.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-replay-crash probe-replay-timeout probe-replay-mismatch probe-results-missing-parent probe-crash probe-timeout selftest

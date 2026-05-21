@@ -10,8 +10,10 @@
 
 typedef struct LFRunContext {
     const char *target_path;
+    const char *expected_kind;
     int timeout_seconds;
     int tsv_output;
+    int replay_mismatch;
     LFOutputMode output_mode;
     LFReport *report;
     unsigned long total_runs;
@@ -75,6 +77,32 @@ static int LFParseOutputMode(const char *text, LFOutputMode *output_mode)
     return -1;
 }
 
+static void LFCheckExpectedReplayKind(
+    LFRunContext *context,
+    const LFRunResult *result
+)
+{
+    const char *actual_kind;
+
+    if (context == 0 || result == 0) {
+        return;
+    }
+
+    if (context->expected_kind == 0) {
+        return;
+    }
+
+    actual_kind = LFResultKindName(result->kind);
+
+    if (strcmp(context->expected_kind, actual_kind) != 0) {
+        context->replay_mismatch = 1;
+        fprintf(stderr, "LEOFUZZ:REPLAY_MISMATCH expected=%s actual=%s\n",
+            context->expected_kind,
+            actual_kind
+        );
+    }
+}
+
 static int LFRunOneInput(const char *input_path, LFRunContext *context)
 {
     LFRunResult result;
@@ -91,6 +119,8 @@ static int LFRunOneInput(const char *input_path, LFRunContext *context)
         context->total_runs++;
         return 0;
     }
+
+    LFCheckExpectedReplayKind(context, &result);
 
     if (context->tsv_output) {
         LFPrintTsvResult(stdout, context->target_path, input_path, &result);
@@ -327,8 +357,10 @@ int main(int argc, char **argv)
     }
 
     context.target_path = target_path;
+    context.expected_kind = replay_loaded ? replay_spec.expected_kind : 0;
     context.timeout_seconds = timeout_seconds;
     context.tsv_output = tsv_output;
+    context.replay_mismatch = 0;
     context.output_mode = output_mode;
     context.report = active_report;
     context.total_runs = 0;
@@ -356,9 +388,10 @@ int main(int argc, char **argv)
     }
 
     if (!tsv_output && replay_loaded) {
-        fprintf(stdout, "LEOFUZZ:REPLAY metadata=%s expected_kind=%s\n",
+        fprintf(stdout, "LEOFUZZ:REPLAY metadata=%s expected_kind=%s mismatch=%d\n",
             replay_spec.metadata_path != 0 ? replay_spec.metadata_path : "",
-            replay_spec.expected_kind != 0 ? replay_spec.expected_kind : ""
+            replay_spec.expected_kind != 0 ? replay_spec.expected_kind : "",
+            context.replay_mismatch
         );
     }
 
@@ -380,7 +413,7 @@ int main(int argc, char **argv)
         LFReportClose(active_report);
     }
 
-    if (context.findings > 0) {
+    if (context.findings > 0 || context.replay_mismatch) {
         exit_status = 1;
     }
 
