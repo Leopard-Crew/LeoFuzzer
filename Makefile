@@ -7,6 +7,7 @@ BIN_DIR = bin
 LEOFUZZ_SOURCES = \
 	tools/leofuzz/main.c \
 	src/LFCorpus.c \
+	src/LFReplay.c \
 	src/LFReport.c \
 	src/LFRunner.c \
 	src/LFResult.c \
@@ -17,7 +18,7 @@ all: $(BIN_DIR)/leofuzz probes
 $(BIN_DIR):
 	mkdir -p $(BIN_DIR)
 
-$(BIN_DIR)/leofuzz: $(LEOFUZZ_SOURCES) src/LFCorpus.h src/LFReport.h src/LFRunner.h src/LFResult.h src/LFTime.h | $(BIN_DIR)
+$(BIN_DIR)/leofuzz: $(LEOFUZZ_SOURCES) src/LFCorpus.h src/LFReplay.h src/LFReport.h src/LFRunner.h src/LFResult.h src/LFTime.h | $(BIN_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -Isrc -o $@ $(LEOFUZZ_SOURCES)
 
 probes: \
@@ -120,6 +121,34 @@ probe-results-domain-reject: all
 	grep '^DOMAIN_REJECT' results/selftest-domain-reject/runs.tsv
 	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-domain-reject/runs.tsv
 
+probe-replay-crash: all
+	rm -rf results/selftest-replay-source-crash results/selftest-replay-crash
+	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/crash-target --input corpus/samples/crash.txt --results results/selftest-replay-source-crash
+	test -f results/selftest-replay-source-crash/findings/000001-CRASH.txt
+	-$(BIN_DIR)/leofuzz --replay results/selftest-replay-source-crash/findings/000001-CRASH.txt --results results/selftest-replay-crash
+	test -f results/selftest-replay-crash/summary.txt
+	test -f results/selftest-replay-crash/runs.tsv
+	test -f results/selftest-replay-crash/findings/000001-CRASH.txt
+	grep 'runs=1' results/selftest-replay-crash/summary.txt
+	grep 'findings=1' results/selftest-replay-crash/summary.txt
+	grep '^CRASH' results/selftest-replay-crash/runs.tsv
+	grep 'kind=CRASH' results/selftest-replay-crash/findings/000001-CRASH.txt
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-replay-crash/runs.tsv
+
+probe-replay-timeout: all
+	rm -rf results/selftest-replay-source-timeout results/selftest-replay-timeout
+	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/timeout-target --input corpus/samples/timeout.txt --timeout 1 --results results/selftest-replay-source-timeout
+	test -f results/selftest-replay-source-timeout/findings/000001-TIMEOUT.txt
+	-$(BIN_DIR)/leofuzz --replay results/selftest-replay-source-timeout/findings/000001-TIMEOUT.txt --timeout 1 --results results/selftest-replay-timeout
+	test -f results/selftest-replay-timeout/summary.txt
+	test -f results/selftest-replay-timeout/runs.tsv
+	test -f results/selftest-replay-timeout/findings/000001-TIMEOUT.txt
+	grep 'runs=1' results/selftest-replay-timeout/summary.txt
+	grep 'findings=1' results/selftest-replay-timeout/summary.txt
+	grep '^TIMEOUT' results/selftest-replay-timeout/runs.tsv
+	grep 'kind=TIMEOUT' results/selftest-replay-timeout/findings/000001-TIMEOUT.txt
+	awk -F '\t' 'NR > 1 { if (NF != 7) exit 1 }' results/selftest-replay-timeout/runs.tsv
+
 probe-results-missing-parent: all
 	rm -rf results/selftest-missing-parent
 	-$(BIN_DIR)/leofuzz --target $(BIN_DIR)/echo-target --input corpus/samples/hello.txt --results results/selftest-missing-parent/out
@@ -141,6 +170,8 @@ selftest: \
 	probe-results-timeout \
 	probe-results-exec-error \
 	probe-results-domain-reject \
+	probe-replay-crash \
+	probe-replay-timeout \
 	probe-results-missing-parent \
 	probe-crash \
 	probe-timeout
@@ -148,4 +179,4 @@ selftest: \
 clean:
 	rm -rf $(BIN_DIR)
 
-.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-results-missing-parent probe-crash probe-timeout selftest
+.PHONY: all clean probes probe probe-tsv probe-corpus probe-corpus-tsv probe-results probe-results-crash probe-results-timeout probe-results-exec-error probe-results-domain-reject probe-replay-crash probe-replay-timeout probe-results-missing-parent probe-crash probe-timeout selftest

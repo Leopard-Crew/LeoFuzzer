@@ -130,3 +130,27 @@ Supported target output modes:
 - quiet: child stdout/stderr are redirected to `/dev/null`
 
 Later versions may add plist output for Leopard-native tooling.
+
+## Replay
+
+A finding metadata file can be replayed with:
+
+    leofuzz --replay results/selftest-crash/findings/000001-CRASH.txt
+
+LeoFuzzer reads these fields:
+
+    target=...
+    input_copy=...
+
+The copied input is then run against the recorded target.
+
+The target may be overridden explicitly:
+
+    leofuzz --replay finding.txt --target bin/alternate-target
+
+Replay is intentionally simple in V0.1:
+
+- one finding metadata file
+- one recorded input copy
+- one target invocation
+- no expected-kind enforcement yet

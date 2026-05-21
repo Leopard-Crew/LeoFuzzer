@@ -1,4 +1,5 @@
 #include "LFCorpus.h"
+#include "LFReplay.h"
 #include "LFReport.h"
 #include "LFRunner.h"
 #include "LFResult.h"
@@ -24,6 +25,7 @@ static void LFPrintUsage(FILE *out)
     fprintf(out, "Usage:\n");
     fprintf(out, "  leofuzz --target TARGET --input FILE [--timeout SECONDS] [--tsv]\n");
     fprintf(out, "  leofuzz --target TARGET --corpus DIR [--timeout SECONDS] [--tsv]\n");
+    fprintf(out, "  leofuzz --replay FINDING.txt [--target TARGET] [--timeout SECONDS]\n");
     fprintf(out, "  leofuzz --target TARGET --input FILE [--target-output inherit|quiet]\n");
     fprintf(out, "  leofuzz --target TARGET --corpus DIR --results DIR\n");
 }
@@ -138,29 +140,39 @@ int main(int argc, char **argv)
     const char *input_path;
     const char *corpus_path;
     const char *results_path;
+    const char *replay_path;
     int timeout_seconds;
     int tsv_output;
     int output_mode_explicit;
     int i;
+    int input_mode_count;
+    int exit_status;
     LFOutputMode output_mode;
     LFRunContext context;
     LFReport report;
     LFReport *active_report;
+    LFReplaySpec replay_spec;
+    int replay_loaded;
 
     target_path = 0;
     input_path = 0;
     corpus_path = 0;
     results_path = 0;
+    replay_path = 0;
     timeout_seconds = 5;
     tsv_output = 0;
     output_mode = LF_OUTPUT_INHERIT;
     output_mode_explicit = 0;
     active_report = 0;
+    replay_loaded = 0;
+    exit_status = 0;
+    LFReplaySpecInit(&replay_spec);
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--target") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -171,6 +183,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--input") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -181,6 +194,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--corpus") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -188,9 +202,21 @@ int main(int argc, char **argv)
             continue;
         }
 
+        if (strcmp(argv[i], "--replay") == 0) {
+            if ((i + 1) >= argc) {
+                LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
+                return 2;
+            }
+
+            replay_path = argv[++i];
+            continue;
+        }
+
         if (strcmp(argv[i], "--results") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -201,6 +227,7 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--timeout") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -211,12 +238,14 @@ int main(int argc, char **argv)
         if (strcmp(argv[i], "--target-output") == 0) {
             if ((i + 1) >= argc) {
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
             if (LFParseOutputMode(argv[++i], &output_mode) != 0) {
                 fprintf(stderr, "LEOFUZZ:ERROR invalid-target-output=%s\n", argv[i]);
                 LFPrintUsage(stderr);
+                LFReplaySpecClear(&replay_spec);
                 return 2;
             }
 
@@ -231,32 +260,66 @@ int main(int argc, char **argv)
 
         if (strcmp(argv[i], "--help") == 0) {
             LFPrintUsage(stdout);
+            LFReplaySpecClear(&replay_spec);
             return 0;
         }
 
         fprintf(stderr, "LEOFUZZ:ERROR unknown-option=%s\n", argv[i]);
         LFPrintUsage(stderr);
+        LFReplaySpecClear(&replay_spec);
         return 2;
+    }
+
+    input_mode_count = 0;
+
+    if (input_path != 0) {
+        input_mode_count++;
+    }
+
+    if (corpus_path != 0) {
+        input_mode_count++;
+    }
+
+    if (replay_path != 0) {
+        input_mode_count++;
+    }
+
+    if (input_mode_count != 1) {
+        fprintf(stderr, "LEOFUZZ:ERROR specify exactly one of --input, --corpus, or --replay\n");
+        LFPrintUsage(stderr);
+        LFReplaySpecClear(&replay_spec);
+        return 2;
+    }
+
+    if (replay_path != 0) {
+        if (LFReplayLoad(&replay_spec, replay_path) != 0) {
+            fprintf(stderr, "LEOFUZZ:ERROR failed-to-load-replay path=%s\n", replay_path);
+            LFReplaySpecClear(&replay_spec);
+            return 1;
+        }
+
+        replay_loaded = 1;
+        input_path = replay_spec.input_copy_path;
+
+        if (target_path == 0) {
+            target_path = replay_spec.target_path;
+        }
     }
 
     if (target_path == 0) {
         LFPrintUsage(stderr);
+        LFReplaySpecClear(&replay_spec);
         return 2;
     }
 
-    if ((input_path == 0 && corpus_path == 0) || (input_path != 0 && corpus_path != 0)) {
-        fprintf(stderr, "LEOFUZZ:ERROR specify exactly one of --input or --corpus\n");
-        LFPrintUsage(stderr);
-        return 2;
-    }
-
-    if ((tsv_output || corpus_path != 0 || results_path != 0) && !output_mode_explicit) {
+    if ((tsv_output || corpus_path != 0 || results_path != 0 || replay_path != 0) && !output_mode_explicit) {
         output_mode = LF_OUTPUT_QUIET;
     }
 
     if (results_path != 0) {
         if (LFReportOpen(&report, results_path) != 0) {
             fprintf(stderr, "LEOFUZZ:ERROR failed-to-open-results path=%s\n", results_path);
+            LFReplaySpecClear(&replay_spec);
             return 1;
         }
 
@@ -283,12 +346,20 @@ int main(int argc, char **argv)
         if (LFVisitCorpusFiles(corpus_path, LFVisitOneCorpusFile, &context) != 0) {
             fprintf(stderr, "LEOFUZZ:ERROR failed-to-read-corpus path=%s\n", corpus_path);
             LFReportClose(active_report);
+            LFReplaySpecClear(&replay_spec);
             return 1;
         }
     }
 
     if (!tsv_output && corpus_path != 0) {
         LFPrintSummary(&context);
+    }
+
+    if (!tsv_output && replay_loaded) {
+        fprintf(stdout, "LEOFUZZ:REPLAY metadata=%s expected_kind=%s\n",
+            replay_spec.metadata_path != 0 ? replay_spec.metadata_path : "",
+            replay_spec.expected_kind != 0 ? replay_spec.expected_kind : ""
+        );
     }
 
     if (active_report != 0) {
@@ -302,6 +373,7 @@ int main(int argc, char **argv)
             ) != 0) {
             fprintf(stderr, "LEOFUZZ:ERROR failed-to-write-summary-report\n");
             LFReportClose(active_report);
+            LFReplaySpecClear(&replay_spec);
             return 1;
         }
 
@@ -309,8 +381,9 @@ int main(int argc, char **argv)
     }
 
     if (context.findings > 0) {
-        return 1;
+        exit_status = 1;
     }
 
-    return 0;
+    LFReplaySpecClear(&replay_spec);
+    return exit_status;
 }
