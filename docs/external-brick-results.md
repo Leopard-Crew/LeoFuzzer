@@ -69,3 +69,36 @@ This is a useful first example of LeoFuzzer's role:
 ## Status
 
 LeoUTF8 is the first external brick confirmed through LeoFuzzer.
+
+## LeoUTF8 Transform Probe Extension
+
+Transform probe baseline:
+
+    v0.7.4-leofuzzer-transform-probes
+
+Transform documentation seal:
+
+    v0.7.4.1-leofuzzer-transform-seal
+
+Confirmed transform probes:
+
+- NFC normalization
+- NFD normalization
+- Unicode case folding
+
+Confirmed command:
+
+    make leofuzz-transform-check
+
+Confirmed results:
+
+    NFC valid:        runs=5 ok=5 rejected=0 findings=0
+    NFC invalid:      runs=5 ok=0 rejected=5 findings=0
+    NFD valid:        runs=5 ok=5 rejected=0 findings=0
+    NFD invalid:      runs=5 ok=0 rejected=5 findings=0
+    CaseFold valid:   runs=5 ok=5 rejected=0 findings=0
+    CaseFold invalid: runs=5 ok=0 rejected=5 findings=0
+
+Status:
+
+    LeoUTF8 is now covered by LeoFuzzer for validation and core UTF-8 transformations.
